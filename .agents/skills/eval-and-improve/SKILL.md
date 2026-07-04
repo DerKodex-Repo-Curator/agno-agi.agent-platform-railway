@@ -45,6 +45,7 @@ For every failed case, decide which kind of failure it is and fix at the appropr
 | Single case fails on full suite but passes alone | Transient flake or upstream rate limit (429s, MCP shutdown traceback) | Re-run the case in isolation. If it passes, re-run the full suite. If 429s persist, back off — don't fix the agent. |
 | Many cases fail at once | Broad regression — model swap, MCP server down, tool removed | Diagnose the root cause first; do NOT paper over with prompt edits |
 | `eval_db` write errors | Postgres down or migration missing | Bring DB up; check `docker logs agentos-db` |
+| Yellow `cleanup failed for <case>` warning, or `cleanup:` in a case's error | Snapshot-diff teardown couldn't delete Studio components the case created — create/edit/publish are ungated, so builder cases write real DB rows (a timeout does not mean nothing was created; the runner waits 10s then deletes what landed) | Check Postgres, then hard-delete the leaked components by id (`eval_db.delete_component(<id>, hard_delete=True)`); don't edit the agent or the case |
 
 **Rule:** never weaken a case to make it green. Edit a case only when the assertion was wrong (overspecified rubric, wrong tool name, mismatch with how the agent's tools are named today). Catching a real regression is the whole point.
 
@@ -95,6 +96,10 @@ Case(
     # Either or both of:
     criteria="<rubric describing a correct response>",
     expected_tool_calls=("<tool_name>",),
+    # Required whenever the case's agent has the ungated create/edit/publish
+    # Studio tools (every agent-builder case) — snapshot-diff teardown deletes
+    # whatever the run created, even on timeout:
+    cleanup_new_components=True,
 )
 ```
 

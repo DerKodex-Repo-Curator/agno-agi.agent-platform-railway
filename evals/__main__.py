@@ -230,6 +230,7 @@ def _print_reliability_verdict(rel_result: object, expected_tools: tuple[str, ..
 async def _run_case_async(case: Case, *, verbose: bool, timeout_seconds: int) -> CaseOutcome:
     start = time.perf_counter()
     pre_run_ids: set[str] | None = None
+    cleanup_error: str | None = None
     if case.cleanup_new_components:
         pre_run_ids = await asyncio.to_thread(snapshot_component_ids)
     try:
@@ -255,7 +256,12 @@ async def _run_case_async(case: Case, *, verbose: bool, timeout_seconds: int) ->
             try:
                 await asyncio.to_thread(delete_new_components, pre_run_ids)
             except Exception as exc:
-                console.print(f"[yellow]cleanup failed for {case.name}: {type(exc).__name__}: {exc}[/yellow]")
+                cleanup_error = f"cleanup: {type(exc).__name__}: {exc}"
+                console.print(f"[yellow]cleanup failed for {case.name}: {exc}[/yellow]")
+    if cleanup_error:
+        # Surface leaked components in the outcome — the console warning is invisible
+        # to the run-evals workflow, which runs the suite with the console quieted.
+        outcome.error = "; ".join(error for error in (outcome.error, cleanup_error) if error)
     outcome.duration_seconds = round(time.perf_counter() - start, 3)
     return outcome
 

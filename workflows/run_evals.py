@@ -50,7 +50,9 @@ async def run_evals_step(_step_input: StepInput) -> StepOutput:
 
     profile = getenv("EVALS_PROFILE", "smoke")
     case_timeout_seconds = _int_env("EVALS_CASE_TIMEOUT_SECONDS", 90)
-    suite_timeout_seconds = _int_env("EVALS_SUITE_TIMEOUT_SECONDS", 600)
+    # 900 bounds the smoke profile's worst case: per-case ceilings sum past 600s
+    # now that builder cases add snapshot/teardown DB calls and a timeout grace.
+    suite_timeout_seconds = _int_env("EVALS_SUITE_TIMEOUT_SECONDS", 900)
 
     try:
         payload = await asyncio.wait_for(

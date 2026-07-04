@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from os import getenv
 from urllib.parse import urlparse
 
+import httpx
 from agno.workflow.step import Step, StepInput, StepOutput
 from agno.workflow.workflow import Workflow
 from sqlalchemy import create_engine, text
@@ -86,6 +87,39 @@ def _check_agentos_url() -> CheckResult:
     return _pass("AgentOS URL", f"Scheduler base URL is {agentos_url}.")
 
 
+async def _check_mcp() -> CheckResult:
+    """The MCP endpoint is the surface chat apps and coding agents depend on; a proxy
+    that strips or misroutes /mcp would otherwise pass every other check.
+
+    Async on purpose: the workflow runs in-process, so a blocking self-request would
+    deadlock the event loop that has to serve it."""
+    mcp_url = getenv("AGENTOS_URL", "http://127.0.0.1:8000").rstrip("/") + "/mcp"
+    payload = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-06-18",
+            "capabilities": {},
+            "clientInfo": {"name": "deployment-check", "version": "1.0"},
+        },
+    }
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            response = await client.post(
+                mcp_url,
+                json=payload,
+                headers={"Accept": "application/json, text/event-stream"},
+            )
+    except Exception as exc:
+        return _warn("MCP", f"Could not reach {mcp_url}: {exc}")
+    if response.status_code == 404:
+        return _fail("MCP", f"{mcp_url} returned 404 — MCP server not mounted, or the route is stripped upstream.")
+    if response.status_code in (401, 403):
+        return _pass("MCP", f"{mcp_url} is mounted and auth-gated (HTTP {response.status_code}).")
+    return _pass("MCP", f"{mcp_url} responded (HTTP {response.status_code}).")
+
+
 def _check_slack_config() -> CheckResult:
     token = bool(getenv("SLACK_BOT_TOKEN"))
     signing_secret = bool(getenv("SLACK_SIGNING_SECRET"))
@@ -143,12 +177,13 @@ def _format_report(checks: list[CheckResult]) -> str:
     return "\n".join(lines)
 
 
-def deployment_check_step(_step_input: StepInput) -> StepOutput:
+async def deployment_check_step(_step_input: StepInput) -> StepOutput:
     """Run deterministic deployment readiness checks and return a report."""
     checks = [
         _check_database(),
         _check_runtime(),
         _check_agentos_url(),
+        await _check_mcp(),
         _check_slack_config(),
         _check_reference_components(),
         _check_schedule_flag(),
@@ -160,7 +195,7 @@ def deployment_check_step(_step_input: StepInput) -> StepOutput:
 deployment_check = Workflow(
     id="deployment-check",
     name="Deployment Check",
-    description="Check DB, auth, scheduler URL, Slack config, schedules, and reference component imports.",
+    description="Check DB, auth, scheduler URL, MCP endpoint, Slack config, schedules, and reference component imports.",
     db=get_postgres_db(),
     steps=[Step(name="deployment-check", executor=deployment_check_step)],
 )

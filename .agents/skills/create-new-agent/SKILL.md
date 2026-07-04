@@ -46,7 +46,7 @@ If the user came in with a concrete agent in mind, ask all five below in one con
 1. **Name and purpose** — what should this agent do? One sentence.
 2. **Pattern** — propose the right one with a heuristic, don't make the user choose blind:
    - **Direct tools** (like [`agents/web_search.py`](../../../agents/web_search.py)): default when the agent uses ≤2 toolkits, or the user explicitly named the tools.
-   - **Context provider** (like [`agents/platform_manager.py`](../../../agents/platform_manager.py)): default when the agent queries a single information source through one `query_<thing>` tool, or you're hiding a sub-agent.
+   - **Context provider** (like the `codebase_context` wiring in [`agents/platform_manager.py`](../../../agents/platform_manager.py)): default when the agent queries a single information source through one `query_<thing>` tool, or you're hiding a sub-agent. (Platform Manager mixes patterns — it also carries direct read-only runtime tools; the context-provider part is the `WorkspaceContextProvider`.)
 3. **Tools / sources** — which MCP servers, toolkits, or context providers? URL of the MCP server if any. (Default: nothing — just chat.)
 4. **Required env vars** — for each toolkit chosen, identify the API key(s) it needs (from the toolkit's `Prerequisites` section in agno docs — see Step 2). For each required key, confirm the user has it set in `.env`. If they don't, offer:
    - (a) add it to `.env` now,
@@ -79,7 +79,7 @@ Don't guess any of the four. Skip this step entirely if the agent is chat-only w
 Create `agents/<slug>.py` (replacing `-` with `_` for the filename: `agents/linear_agent.py`). Follow the closest reference pattern:
 
 - **Direct tools** → mirror [`agents/web_search.py`](../../../agents/web_search.py).
-- **Context provider** → mirror [`agents/platform_manager.py`](../../../agents/platform_manager.py).
+- **Context provider** → mirror the `codebase_context` part of [`agents/platform_manager.py`](../../../agents/platform_manager.py): build the `WorkspaceContextProvider`, unpack `*provider.get_tools()` into `tools=`, and append `provider.instructions()` to the agent's instructions. Skip its extra runtime tools unless the new agent also needs direct tools.
 - **Studio builder** → mirror [`agents/agent_builder.py`](../../../agents/agent_builder.py) when the agent should create or refine AgentOS components through StudioTools.
 
 Required structure:
@@ -130,7 +130,7 @@ from agents.<slug_underscore> import <slug_underscore>
 
 agent_os = AgentOS(
     ...
-    agents=[platform_manager, web_search, agent_builder, <slug_underscore>],
+    agents=[agent_builder, platform_manager, web_search, <slug_underscore>],
     ...
 )
 ```
@@ -192,6 +192,8 @@ jq -r '.content // .' < /tmp/agent-out.json
 
 Pass = `HTTP 200` and a non-empty `.content` field.
 
+> **Studio-builder-pattern agents:** create/edit/publish StudioTools execute immediately against the DB — only deletes pause for confirmation. Don't smoke-test with a "Build me X" quick prompt; it will create and publish a real component. Probe with a read-only prompt instead (e.g. "What components can you see in the registry?"), or delete anything the smoke test created (the delete pauses for approval in the AgentOS UI).
+
 Check the container logs to see which tools fired:
 
 ```bash
@@ -213,7 +215,7 @@ Iterate at most 2-3 times on the prompt before stopping and surfacing the questi
 
 When the smoke test passes:
 
-1. Tell the user the agent's slug. They can chat with it at `https://os.agno.com` (if their OS is connected there) or against `http://localhost:8000` directly for local-only.
+1. Tell the user the agent's slug. They can chat with it at `https://os.agno.com` (if their OS is connected there) or against `http://localhost:8000` directly for local-only. The agent is also exposed through the AgentOS MCP endpoint at `/mcp` (`run_agent` tool) — `./scripts/mcp_check.sh` smoke-tests that surface.
 2. Suggest the next-step loops:
    - [`extend-agent`](../extend-agent/SKILL.md) — user-driven changes (add a tool, refine the prompt, fix a bug).
    - [`improve-agent`](../improve-agent/SKILL.md) — autonomous probe-and-harden against the agent's `INSTRUCTIONS`.

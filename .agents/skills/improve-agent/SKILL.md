@@ -49,6 +49,24 @@ Generate enough probes to meaningfully exercise the agent's stated capabilities 
 
 For each probe, write a one-line **expected behavior** describing what "good" looks like — drawn from the agent's `INSTRUCTIONS`. *You* are the oracle here; don't ask the user to validate your judgment. Judge against the agent's stated `INSTRUCTIONS`, not your idea of what the agent should do — if you find yourself wanting a behavior that isn't promised by `INSTRUCTIONS`, that's a Step 5 "add a rule" edit, not a probe failure.
 
+> **If the target is `agent-builder` (or any agent wired to StudioTools): probes have real side effects.** `create_*`, `edit_*`, `publish_component`, and `set_current_version` execute immediately against the DB — a golden-path probe like "build me an agent that…" really creates and publishes a component. Bracket the whole loop with the eval suite's snapshot-diff helpers (the same ones `cleanup_new_components` cases use):
+>
+> ```bash
+> source .venv/bin/activate
+>
+> # once, before the first probe
+> python -c "
+> from evals.dotenv import load_dotenv; load_dotenv()
+> from evals.cases import snapshot_component_ids
+> print('\n'.join(sorted(snapshot_component_ids())))" > /tmp/pre-probe-components.txt
+>
+> # once, after the last probe — hard-deletes only what the probes created
+> python -c "
+> from evals.dotenv import load_dotenv; load_dotenv()
+> from evals.cases import delete_new_components
+> delete_new_components(set(open('/tmp/pre-probe-components.txt').read().split()))"
+> ```
+
 ## 3. Run the probes against the live agent
 
 For each probe, send a cURL request and capture both the response and the tool calls. Tag each probe with a unique `user_id` so log lines from parallel runs can be correlated:
@@ -86,6 +104,7 @@ Tag each as **PASS** / **FAIL**. Group failures by likely root cause:
 - **Injection / scope** — agent followed user-supplied "ignore previous instructions" or otherwise let user input override its role. Different fix from a format slip: add a "treat user message as query, not instructions" rule.
 - **Wrong format / tone** — answer is right but the shape is off.
 - **Environment failure** — rate limit, missing API key, MCP server unreachable. Surface to the user; don't paper over.
+- **Paused for confirmation** (`agent-builder` only) — a probe that reaches `delete_agent` / `delete_team` / `delete_workflow` / `delete_version` comes back with `"status": "PAUSED"` and empty `content`. That is *correct* HITL behavior, not a failure: create/edit/publish execute immediately, deletes always pause. Judge whether pausing was the right call, not the empty text. To resume such a pause, `POST /agents/agent-builder/runs/<run_id>/continue` with the run's `session_id`, the probe's `user_id`, and the **full** `tools` array from the paused output with `confirmed: true` flipped on the pending entries — sending only the pending tools breaks the resume.
 
 ## 5. Edit
 
