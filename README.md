@@ -9,7 +9,7 @@ Built on [Agno](https://docs.agno.com). Everything runs in your cloud. Your data
 This codebase has two self-driving loops:
 
 - **Coding-agent skills** let Claude Code, Codex, Cursor, and other coding agents build, test, and improve the platform automatically. Five skills cover the full agent development lifecycle — see [Using the platform](#using-the-platform).
-- **Agent Builder** creates agents, teams, and workflows through AgentOS Studio tools — from the UI, Slack, or any MCP frontend — grounded by the Agno docs MCP and a safe registry.
+- **Two flagship agents** run the platform from any frontend — the UI, Slack, or any MCP client. **Agent Builder** creates agents, teams, and workflows through AgentOS Studio tools, grounded by the Agno docs MCP and a safe registry. **Platform Manager** understands, monitors, and explains the platform: codebase wiring, eval history, deployment checks, schedules. (**WebSearch** rounds out the trio as the simplest possible agent — the sample to copy.)
 
 Trace data, agent code, evals, and system logs are all available to coding agents, so the platform can inspect and improve itself end to end.
 
@@ -43,6 +43,10 @@ Confirm your AgentOS is running at [http://localhost:8000/docs](http://localhost
 1. Click **Chat** under the **Agent Builder** agent and try the first prompt: "Build an agent that tracks AI news and writes a daily brief". Go through the agent development process.
 2. Once created, click the **Refresh** button on the top right. You should now see the "Daily AI News Brief" agent in the **Agents** dropdown. Click the newly created agent.
 3. Ask: "What's new with Anthropic?"
+
+### Step 4: Check platform health
+
+Click **Chat** under **Platform Manager** and ask: "How healthy is the platform?" It answers from the codebase and runtime data — eval history, deployment checks, schedules, and the component you just built.
 
 ## Use your platform from Claude Code and chat apps
 
@@ -190,6 +194,8 @@ If a case fails, run **`/eval-and-improve`** — it diagnoses each failure, fixe
 ### Maintain
 
 Because the repo is managed primarily by coding agents, it moves fast. Run `/review-and-improve` before a release or after a refactor: it sweeps for drift between docs, code, and config, auto-fixes mechanical drift like stale paths and missing env vars, and flags anything bigger.
+
+From chat, ask **Platform Manager** for a health check any time — it reads the latest deployment-check report and eval history, diagnoses, and names the skill or action to fix what it finds.
 
 ## Environment variables
 

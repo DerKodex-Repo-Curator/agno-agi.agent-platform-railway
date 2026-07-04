@@ -4,14 +4,14 @@ This file is the source of truth for any agent (Claude Code, Codex, others) work
 
 ## Project Overview
 
-A self-driving agent platform built on [Agno](https://docs.agno.com), shipped as a copy-pasteable starting point. Three reference agents demonstrate web search, codebase search, and agent/team/workflow creation from the UI, Slack, or any MCP frontend. AgentOS doubles as an MCP server, so chat apps (claude.ai, ChatGPT) and coding agents (Claude Code, Cursor) work *through* the platform, not just on it. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Designed to run locally via Docker and deploy to Railway with a single script.
+A self-driving agent platform built on [Agno](https://docs.agno.com), shipped as a copy-pasteable starting point. Two flagship agents — Agent Builder (creates agents, teams, and workflows) and Platform Manager (understands, monitors, and explains the platform) — plus WebSearch as the simplest sample agent to copy. AgentOS doubles as an MCP server, so chat apps (claude.ai, ChatGPT) and coding agents (Claude Code, Cursor) work *through* the platform, not just on it. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Designed to run locally via Docker and deploy to Railway with a single script.
 
 ## Architecture
 
 ```
 AgentOS  (app/main.py)
 ├── WebSearch    (agents/web_search.py)   — Parallel SDK or keyless MCPTools
-├── CodeSearch   (agents/code_search.py)  — WorkspaceContextProvider
+├── Platform Manager (agents/platform_manager.py) — WorkspaceContextProvider + read-only runtime tools
 ├── Agent Builder (agents/agent_builder.py) — Agno docs MCP + StudioTools
 ├── DeployCheck  (workflows/deployment_check.py) — deterministic readiness workflow
 └── RunEvals     (workflows/run_evals.py) — opt-in eval suite workflow
@@ -20,7 +20,7 @@ AgentOS  (app/main.py)
 Shared:
 - PostgreSQL + pgvector for sessions, memory, knowledge.
 - `app.settings.default_model()` returns `OpenAIResponses(id="gpt-5.5")` — bump the model in one place.
-- `app.registry.registry` exposes the safe Studio registry Agent Builder can use: Agno docs MCP, web search, reasoning tools, utility functions, the default model, the shared DB, and the reference agents (web-search, code-search).
+- `app.registry.registry` exposes the safe Studio registry Agent Builder can use: Agno docs MCP, web search, reasoning tools, utility functions, the default model, the shared DB, and the reference agents (web-search, platform-manager).
 - Scheduler enabled by default (`scheduler=True`); `app/schedules.py` registers schedules from the lifespan. Deployment check runs daily **on** by default — set `ENABLE_DEPLOY_CHECK=False` to disable it. Scheduled evals are **off** by default — set `ENABLE_SCHEDULED_EVALS=True` to schedule the run-evals workflow.
 - Slack interface lights up automatically when both `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` are set.
 - MCP server on by default (`enable_mcp_server=True`) at `/mcp` — see [MCP interface](#mcp-interface).
@@ -35,7 +35,7 @@ Shared:
 | [`app/registry.py`](app/registry.py) | Safe Studio registry used by Agent Builder — docs MCP, web tools, utility functions, reference agents. |
 | [`app/config.yaml`](app/config.yaml) | Quick prompts per agent (keyed by agent `id`). |
 | [`agents/web_search.py`](agents/web_search.py) | Reference agent — direct tools (Parallel SDK or MCP). |
-| [`agents/code_search.py`](agents/code_search.py) | Reference agent — context provider. |
+| [`agents/platform_manager.py`](agents/platform_manager.py) | Flagship agent — codebase context provider + read-only runtime tools (eval history, deployment checks, schedules, components). |
 | [`agents/agent_builder.py`](agents/agent_builder.py) | Reference agent — creates, edits, and publishes agents, teams, and workflows through StudioTools immediately; only deletes keep a HITL confirmation gate. |
 | [`workflows/deployment_check.py`](workflows/deployment_check.py) | Reference workflow — a deterministic `Step` that checks DB, auth, scheduler URL, Slack config, and component imports; imported into `app/main.py` and passed to `AgentOS(workflows=[...])`. |
 | [`workflows/run_evals.py`](workflows/run_evals.py) | Optional workflow — runs an eval profile and returns a compact report. Registered but not scheduled unless `ENABLE_SCHEDULED_EVALS=True`. |
@@ -119,7 +119,7 @@ my_agent = Agent(
 Three patterns to copy from:
 
 - **Direct tools** — see [`agents/web_search.py`](agents/web_search.py). The agent sees each tool individually. Best when the user knows which tools the agent needs.
-- **Context provider** — see [`agents/code_search.py`](agents/code_search.py). The agent sees one `query_<thing>` tool that hands off to a sub-agent. Best for one-source agents and when collapsing many tools into one keeps the model focused.
+- **Context provider** — see [`agents/platform_manager.py`](agents/platform_manager.py). The agent sees one `query_<thing>` tool that hands off to a sub-agent. Best for one-source agents and when collapsing many tools into one keeps the model focused. Platform Manager also shows combining a provider with direct read-only tools — two lenses on one domain.
 - **Studio builder** — see [`agents/agent_builder.py`](agents/agent_builder.py). The agent sees StudioTools, a safe `Registry`, Agno docs MCP, and delete-only confirmation gates: create/edit/publish execute immediately (every mutation lands in the DB as a versioned component — inspectable and reversible), while deletes pause for human approval. Best when the user should create or refine components from the AgentOS UI, Slack, or an MCP frontend.
 
 ### Database
@@ -221,17 +221,11 @@ To add your own: define a `Workflow` in `workflows/`, import it into [`app/main.
 
 See [agno scheduler docs](https://docs.agno.com/agent-os/scheduler) for the cron API.
 
-## Optional Platform Steward
+## Platform Manager
 
-Keep this template light by default. For production operations, add a Platform Steward agent or workflow as an opt-in layer. It should read deployment-check output, eval reports, traces, logs, and recent diffs; diagnose likely causes; then recommend or prepare a fix behind approval. Do not register it by default in this template.
+The platform's ops surface is the Platform Manager agent ([`agents/platform_manager.py`](agents/platform_manager.py)) — read-only by design. It combines the codebase context provider (how the platform is wired) with runtime tools over Postgres (eval history, deployment-check reports, schedules, runtime-built components), diagnoses issues across both lenses, and hands off fixes: code changes go to coding agents via the skills in [`.agents/skills/`](.agents/skills/), component changes go to Agent Builder.
 
-Good first tools:
-
-- read eval JSON reports
-- read recent deployment-check results
-- inspect trace/log summaries
-- inspect `git diff`
-- propose a patch or PR, but require human approval before mutation or deploy
+Keep it read-only. A mutating platform action would need the delete-style confirmation gate, and MCP frontends cannot resume a paused run — so gated steward actions are unusable exactly where Platform Manager is most useful. Future read tools (trace summaries, `git diff` inspection) belong here; mutations belong with coding agents through git, or behind Agent Builder's delete gate.
 
 ## MCP interface
 

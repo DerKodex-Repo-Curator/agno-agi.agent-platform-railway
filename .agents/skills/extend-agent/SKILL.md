@@ -32,7 +32,7 @@ Open `agents/<slug>.py`. Capture:
 
 - **Stated purpose** — the file's docstring + the `INSTRUCTIONS` string.
 - **Tools** — what's wired and what each one does.
-- **Pattern** — direct tools (like [`agents/web_search.py`](../../../agents/web_search.py)) or context provider (like [`agents/code_search.py`](../../../agents/code_search.py)).
+- **Pattern** — direct tools (like [`agents/web_search.py`](../../../agents/web_search.py)) or context provider (like [`agents/platform_manager.py`](../../../agents/platform_manager.py)).
 - **Existing levers** — `enable_agentic_memory`, `num_history_runs`, `knowledge=`, model id.
 
 Restate the agent's purpose to the user in 1-2 sentences before asking what to change. This catches "I thought it did X but actually it does Y" upfront.
@@ -59,7 +59,7 @@ What to capture per branch:
 - **Add a capability**:
   - *Knowledge base* — `from db import create_knowledge`, instantiate with a name + table, pass via `knowledge=` on the Agent. Document load step (`.add_content_async()`) goes wherever ingestion lives.
   - *Memory* — flags on the Agent constructor: `enable_agentic_memory`, `enable_user_memories`, `add_history_to_context`, `num_history_runs`. Read agno's memory docs to pick the right one.
-  - *Sub-agent / context provider* — mirror [`agents/code_search.py`](../../../agents/code_search.py). The parent sees one `query_<thing>(question)` tool; the sub-agent does the work.
+  - *Sub-agent / context provider* — mirror [`agents/platform_manager.py`](../../../agents/platform_manager.py). The parent sees one `query_<thing>(question)` tool; the sub-agent does the work.
   - *Scheduled task* — see [agno scheduler docs](https://docs.agno.com/agent-os/scheduler) and the `scheduler=True` line in [`app/main.py`](../../../app/main.py).
 - **Refine instructions** — no docs needed. Read the current `INSTRUCTIONS`, propose a minimal diff. Prefer narrowing ("on recent-events questions, follow up with a `web_fetch`") over forbidding.
 - **Fix a bug** — first reproduce the failure on the live agent (see Step 6). Then identify the layer: `INSTRUCTIONS` (most common), tool (wrong tool wired or missing), model (under-capable), env (rate limit, missing key, MCP unreachable).

@@ -35,7 +35,7 @@ async def main() -> None:
             print(f"MCP OK — {len(tools.tools)} tools")
             result = await session.call_tool(
                 "run_agent",
-                {"agent_id": "code-search", "message": sys.argv[1]},
+                {"agent_id": "platform-manager", "message": sys.argv[1]},
                 read_timeout_seconds=None,
             )
             payload = json.loads(result.content[0].text)

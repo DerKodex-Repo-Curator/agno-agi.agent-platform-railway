@@ -99,7 +99,7 @@ Call an agent through the MCP endpoint and show the human the response. The repo
 ./scripts/mcp_check.sh
 ```
 
-**Verify:** prints `MCP OK` and an agent response naming `web-search`, `code-search`, and `agent-builder`. Show the human the response — this is their platform answering through MCP.
+**Verify:** prints `MCP OK` and an agent response naming `web-search`, `platform-manager`, and `agent-builder`. Show the human the response — this is their platform answering through MCP.
 
 **If it fails:** an exception here usually means the API restarted mid-call (`docker compose logs agentos-api --tail 20`) or the model call failed (check the `OPENAI_API_KEY`). Re-run once before diagnosing.
 

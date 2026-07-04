@@ -46,7 +46,7 @@ If the user came in with a concrete agent in mind, ask all five below in one con
 1. **Name and purpose** — what should this agent do? One sentence.
 2. **Pattern** — propose the right one with a heuristic, don't make the user choose blind:
    - **Direct tools** (like [`agents/web_search.py`](../../../agents/web_search.py)): default when the agent uses ≤2 toolkits, or the user explicitly named the tools.
-   - **Context provider** (like [`agents/code_search.py`](../../../agents/code_search.py)): default when the agent queries a single information source through one `query_<thing>` tool, or you're hiding a sub-agent.
+   - **Context provider** (like [`agents/platform_manager.py`](../../../agents/platform_manager.py)): default when the agent queries a single information source through one `query_<thing>` tool, or you're hiding a sub-agent.
 3. **Tools / sources** — which MCP servers, toolkits, or context providers? URL of the MCP server if any. (Default: nothing — just chat.)
 4. **Required env vars** — for each toolkit chosen, identify the API key(s) it needs (from the toolkit's `Prerequisites` section in agno docs — see Step 2). For each required key, confirm the user has it set in `.env`. If they don't, offer:
    - (a) add it to `.env` now,
@@ -79,7 +79,7 @@ Don't guess any of the four. Skip this step entirely if the agent is chat-only w
 Create `agents/<slug>.py` (replacing `-` with `_` for the filename: `agents/linear_agent.py`). Follow the closest reference pattern:
 
 - **Direct tools** → mirror [`agents/web_search.py`](../../../agents/web_search.py).
-- **Context provider** → mirror [`agents/code_search.py`](../../../agents/code_search.py).
+- **Context provider** → mirror [`agents/platform_manager.py`](../../../agents/platform_manager.py).
 - **Studio builder** → mirror [`agents/agent_builder.py`](../../../agents/agent_builder.py) when the agent should create or refine AgentOS components through StudioTools.
 
 Required structure:
@@ -130,7 +130,7 @@ from agents.<slug_underscore> import <slug_underscore>
 
 agent_os = AgentOS(
     ...
-    agents=[code_search, web_search, agent_builder, <slug_underscore>],
+    agents=[platform_manager, web_search, agent_builder, <slug_underscore>],
     ...
 )
 ```

@@ -21,7 +21,7 @@ from os import getenv
 from agno.agent import Agent
 
 from agents.agent_builder import agent_builder
-from agents.code_search import code_search
+from agents.platform_manager import platform_manager
 from agents.web_search import web_search
 from db import get_postgres_db
 
@@ -90,37 +90,52 @@ CASES: tuple[Case, ...] = (
         ),
         expected_tool_calls=(_WEB_SEARCH_TOOL,),
     ),
-    # CodeSearch — codebase tool fires AND response names the right agents.
+    # Platform Manager — codebase lens fires AND response names the right agents.
     Case(
-        name="code_search_lists_registered_agents",
-        agent=code_search,
+        name="platform_manager_lists_registered_agents",
+        agent=platform_manager,
         input="Which agents are registered in this AgentOS instance?",
         profiles=("smoke", "release"),
         timeout_seconds=90,
         criteria=(
-            "Identifies `web-search`, `code-search`, and `agent-builder` as the registered agents. May reference app/main.py."
+            "Identifies `web-search`, `platform-manager`, and `agent-builder` as the registered agents. "
+            "May reference app/main.py."
         ),
         expected_tool_calls=("query_my_codebase",),
     ),
     Case(
-        name="code_search_self_describes_platform",
-        agent=code_search,
+        name="platform_manager_self_describes_platform",
+        agent=platform_manager,
         input="Describe this AgentOS: which agents, workflows, and schedules does it run?",
         profiles=("smoke", "release"),
         # Broad self-description means the workspace sub-agent reads several files.
         timeout_seconds=150,
         criteria=(
             "Answers from this repository's code (not generic AgentOS documentation): names the three "
-            "registered agents (`web-search`, `code-search`, `agent-builder`), the `deployment-check` and "
+            "registered agents (`web-search`, `platform-manager`, `agent-builder`), the `deployment-check` and "
             "`run-evals` workflows, and the scheduler setup (daily deployment-check cron on by "
             "default, scheduled evals opt-in)."
         ),
         expected_tool_calls=("query_my_codebase",),
     ),
-    # CodeSearch — first-run onboarding should make the platform feel self-describing.
+    # Platform Manager — runtime lens: health questions read the deployment-check report.
     Case(
-        name="code_search_teaches_agentos_onboarding",
-        agent=code_search,
+        name="platform_manager_reads_platform_health",
+        agent=platform_manager,
+        input="How healthy is the platform right now? Check the latest deployment check.",
+        profiles=("smoke", "release"),
+        timeout_seconds=90,
+        criteria=(
+            "Reports the latest deployment-check result grounded in the tool output (overall status and "
+            "at least one specific check), or clearly states that no deployment-check run is recorded "
+            "yet and how to run one. Does not fabricate a report."
+        ),
+        expected_tool_calls=("get_deployment_check_report",),
+    ),
+    # Platform Manager — first-run onboarding should make the platform feel self-describing.
+    Case(
+        name="platform_manager_teaches_agentos_onboarding",
+        agent=platform_manager,
         input="Teach me how to use this AgentOS",
         profiles=("smoke", "release"),
         # Broad onboarding tour means the workspace sub-agent reads several files.
@@ -185,10 +200,10 @@ CASES: tuple[Case, ...] = (
             "a scoped reviewed tool through a code change if privileged capability is genuinely needed."
         ),
     ),
-    # CodeSearch — graceful unknown.
+    # Platform Manager — graceful unknown.
     Case(
-        name="code_search_admits_unknown_function",
-        agent=code_search,
+        name="platform_manager_admits_unknown_function",
+        agent=platform_manager,
         input="Where is the function `fizz_buzz_xyz` defined in this project?",
         profiles=("release",),
         timeout_seconds=60,

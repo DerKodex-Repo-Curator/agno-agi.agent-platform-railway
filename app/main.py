@@ -11,7 +11,7 @@ from agno.os import AgentOS
 from agno.utils.log import log_info
 
 from agents.agent_builder import agent_builder
-from agents.code_search import code_search
+from agents.platform_manager import platform_manager
 from agents.web_search import web_search
 from app.registry import registry
 from app.schedules import register_schedules
@@ -78,7 +78,7 @@ agent_os = AgentOS(
     enable_mcp_server=True,
     lifespan=lifespan,
     db=get_postgres_db(),
-    agents=[agent_builder, code_search, web_search],
+    agents=[agent_builder, platform_manager, web_search],
     workflows=[deployment_check, run_evals],
     interfaces=interfaces,
     registry=registry,
