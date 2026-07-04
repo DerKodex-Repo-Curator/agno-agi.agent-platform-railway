@@ -10,6 +10,8 @@ authors = [{ name = "Agno", email = "hello@agno.com" }]
 dependencies = [
   "agno[os,slack]",
   "fastapi[standard]",
+  # AgentOS MCP server (enable_mcp_server=True) imports fastmcp; no agno extra ships it.
+  "fastmcp",
   "mcp",
   "openai",
   "parallel-web",

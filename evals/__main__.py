@@ -36,7 +36,7 @@ from rich.live import Live  # noqa: E402
 from rich.status import Status  # noqa: E402
 from rich.table import Table  # noqa: E402
 
-from evals.cases import CASES, Case, eval_db  # noqa: E402
+from evals.cases import CASES, Case, delete_new_components, eval_db, snapshot_component_ids  # noqa: E402
 
 app = typer.Typer(add_completion=False, no_args_is_help=False, pretty_exceptions_show_locals=False)
 console = Console()
@@ -229,6 +229,9 @@ def _print_reliability_verdict(rel_result: object, expected_tools: tuple[str, ..
 
 async def _run_case_async(case: Case, *, verbose: bool, timeout_seconds: int) -> CaseOutcome:
     start = time.perf_counter()
+    pre_run_ids: set[str] | None = None
+    if case.cleanup_new_components:
+        pre_run_ids = await asyncio.to_thread(snapshot_component_ids)
     try:
         outcome = await asyncio.wait_for(
             _run_case_inner_async(case, verbose=verbose),
@@ -241,6 +244,18 @@ async def _run_case_async(case: Case, *, verbose: bool, timeout_seconds: int) ->
             profiles=case.profiles,
             error=f"timeout: exceeded {case.timeout_seconds or timeout_seconds}s",
         )
+        if pre_run_ids is not None:
+            # Cancelling the run does not stop a sync Studio tool already executing in
+            # its worker thread; give an in-flight create a moment to commit so the
+            # teardown below sees it instead of leaking it.
+            await asyncio.sleep(10)
+    finally:
+        # Teardown runs even on timeout — the mutation may have landed before the clock ran out.
+        if pre_run_ids is not None:
+            try:
+                await asyncio.to_thread(delete_new_components, pre_run_ids)
+            except Exception as exc:
+                console.print(f"[yellow]cleanup failed for {case.name}: {type(exc).__name__}: {exc}[/yellow]")
     outcome.duration_seconds = round(time.perf_counter() - start, 3)
     return outcome
 

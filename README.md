@@ -9,7 +9,7 @@ Built on [Agno](https://docs.agno.com). Everything runs in your cloud. Your data
 This codebase has two self-driving loops:
 
 - **Coding-agent skills** let Claude Code, Codex, Cursor, and other coding agents build, test, and improve the platform automatically. Five skills cover the full agent development lifecycle — see [Using the platform](#using-the-platform).
-- **Agent Builder in the UI** creates agents, teams, and workflows through AgentOS Studio tools, grounded by the Agno docs MCP and a safe registry.
+- **Agent Builder** creates agents, teams, and workflows through AgentOS Studio tools — from the UI, Slack, or any MCP frontend — grounded by the Agno docs MCP and a safe registry.
 
 Trace data, agent code, evals, and system logs are all available to coding agents, so the platform can inspect and improve itself end to end.
 
@@ -43,6 +43,22 @@ Confirm your AgentOS is running at [http://localhost:8000/docs](http://localhost
 1. Click **Chat** under the **Agent Builder** agent and try the first prompt: "Build an agent that tracks AI news and writes a daily brief". Go through the agent development process.
 2. Once created, click the **Refresh** button on the top right. You should now see the "Daily AI News Brief" agent in the **Agents** dropdown. Click the newly created agent.
 3. Ask: "What's new with Anthropic?"
+
+## Use your platform from Claude Code and chat apps
+
+The platform is one backend for every frontend. AgentOS ships an MCP server at `/mcp` (`enable_mcp_server=True` in [`app/main.py`](app/main.py)), so any MCP client can call your agents, teams, and workflows through tools like `run_agent`, `run_team`, and `run_workflow`.
+
+**Coding agents.** Register the endpoint and Claude Code can drive the platform:
+
+```sh
+claude mcp add --transport http agent-platform http://localhost:8000/mcp
+```
+
+Any other MCP-capable tool (Cursor, Codex, …) works the same way — point it at `http://localhost:8000/mcp`. Setting up a fresh machine? Hand [`docs/setup-platform.md`](docs/setup-platform.md) to any coding agent: it takes the human from clone to connected, verifying every step.
+
+**Chat apps.** claude.ai and ChatGPT can't reach localhost — deploy first (see below), then add your platform as a connector. In claude.ai: **Settings → Connectors → Add custom connector** → `https://<your-railway-domain>/mcp`. Same URL in ChatGPT's connector settings.
+
+**Machine access in production.** There are no separate service accounts to manage: `/mcp` sits behind the same Token-Based Authorization as the rest of the API. Mint a token at os.agno.com and send it as `Authorization: Bearer <token>`. Locally (`RUNTIME_ENV=dev`) no token is needed.
 
 ## Run in production
 
@@ -142,7 +158,7 @@ Create agents/teams/workflows from the UI or using a coding agent, improve and e
 
 ### Create
 
-**From the UI.** Open **Agent Builder** and describe the job, as in the quickstart. Agent Builder pulls framework details from the Agno docs MCP, picks tools and models from the safe Studio registry, and creates components behind confirmation gates — approving the create publishes version 1 immediately, later edits stay drafts until you approve publishing, and it runs the component only when you ask.
+**From the UI, chat, or a coding agent.** Open **Agent Builder** and describe the job, as in the quickstart — or reach it through Slack or any MCP frontend. Agent Builder pulls framework details from the Agno docs MCP, picks tools and models from the safe Studio registry, and creates components immediately: creating publishes version 1, later edits stay drafts until published, and only deletes pause for your approval. It runs the component only when you ask.
 
 **From a coding agent.** For agents that live in the repo, open your coding agent of choice (Claude Code, Codex, Cursor) and run:
 
@@ -168,6 +184,8 @@ Run the eval suite to check for regressions. The eval cases live in [`evals/case
 ```sh
 python -m evals --profile smoke     # fast checks of the self-driving surfaces
 ```
+
+If a case fails, run **`/eval-and-improve`** — it diagnoses each failure, fixes what's in scope, and loops until green.
 
 ### Maintain
 

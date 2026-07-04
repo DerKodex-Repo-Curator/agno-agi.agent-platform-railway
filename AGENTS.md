@@ -4,7 +4,7 @@ This file is the source of truth for any agent (Claude Code, Codex, others) work
 
 ## Project Overview
 
-A self-driving agent platform built on [Agno](https://docs.agno.com), shipped as a copy-pasteable starting point. Three reference agents demonstrate web search, codebase search, and UI-driven agent/team/workflow creation. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Designed to run locally via Docker and deploy to Railway with a single script.
+A self-driving agent platform built on [Agno](https://docs.agno.com), shipped as a copy-pasteable starting point. Three reference agents demonstrate web search, codebase search, and agent/team/workflow creation from the UI, Slack, or any MCP frontend. AgentOS doubles as an MCP server, so chat apps (claude.ai, ChatGPT) and coding agents (Claude Code, Cursor) work *through* the platform, not just on it. Postgres (pgvector) handles persistence for sessions, memory, and knowledge. Designed to run locally via Docker and deploy to Railway with a single script.
 
 ## Architecture
 
@@ -23,6 +23,7 @@ Shared:
 - `app.registry.registry` exposes the safe Studio registry Agent Builder can use: Agno docs MCP, web search, reasoning tools, utility functions, the default model, the shared DB, and the reference agents (web-search, code-search).
 - Scheduler enabled by default (`scheduler=True`); `app/schedules.py` registers schedules from the lifespan. Deployment check runs daily **on** by default — set `ENABLE_DEPLOY_CHECK=False` to disable it. Scheduled evals are **off** by default — set `ENABLE_SCHEDULED_EVALS=True` to schedule the run-evals workflow.
 - Slack interface lights up automatically when both `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` are set.
+- MCP server on by default (`enable_mcp_server=True`) at `/mcp` — see [MCP interface](#mcp-interface).
 - JWT auth on whenever `RUNTIME_ENV == "prd"` (so production deploys are gated by default).
 
 ## Key Files
@@ -35,7 +36,7 @@ Shared:
 | [`app/config.yaml`](app/config.yaml) | Quick prompts per agent (keyed by agent `id`). |
 | [`agents/web_search.py`](agents/web_search.py) | Reference agent — direct tools (Parallel SDK or MCP). |
 | [`agents/code_search.py`](agents/code_search.py) | Reference agent — context provider. |
-| [`agents/agent_builder.py`](agents/agent_builder.py) | Reference agent — creates agents, teams, and workflows through StudioTools with HITL gates. |
+| [`agents/agent_builder.py`](agents/agent_builder.py) | Reference agent — creates, edits, and publishes agents, teams, and workflows through StudioTools immediately; only deletes keep a HITL confirmation gate. |
 | [`workflows/deployment_check.py`](workflows/deployment_check.py) | Reference workflow — a deterministic `Step` that checks DB, auth, scheduler URL, Slack config, and component imports; imported into `app/main.py` and passed to `AgentOS(workflows=[...])`. |
 | [`workflows/run_evals.py`](workflows/run_evals.py) | Optional workflow — runs an eval profile and returns a compact report. Registered but not scheduled unless `ENABLE_SCHEDULED_EVALS=True`. |
 | [`app/schedules.py`](app/schedules.py) | `register_schedules()` — cron registration, called from the lifespan (idempotent, fail-soft). |
@@ -44,6 +45,7 @@ Shared:
 | [`evals/cases.py`](evals/cases.py) | Eval cases (each is a `Case` with optional judge + reliability checks). |
 | [`evals/__main__.py`](evals/__main__.py) | `python -m evals` runner — wraps agno's `AgentAsJudgeEval` + `ReliabilityEval`. |
 | [`.agents/skills/`](.agents/skills/) | Dev-time **coding-agent workflows** (`create-new-agent`, `extend-agent`, `improve-agent`, `eval-and-improve`, `review-and-improve`) — slash commands coding agents run *on this repo*. `.claude/skills` is a committed symlink into it — see [Working with coding agents](#working-with-coding-agents). |
+| [`docs/setup-platform.md`](docs/setup-platform.md) | Zero-to-connected setup prompt — hand it to any coding agent on a fresh machine: clone → run → register `/mcp` → verify end to end. |
 | [`compose.yaml`](compose.yaml) | Docker Compose for local development. |
 | [`railway.json`](railway.json) | Railway deploy config (Docker + 1 replica + 4Gi/2vCPU). |
 
@@ -118,7 +120,7 @@ Three patterns to copy from:
 
 - **Direct tools** — see [`agents/web_search.py`](agents/web_search.py). The agent sees each tool individually. Best when the user knows which tools the agent needs.
 - **Context provider** — see [`agents/code_search.py`](agents/code_search.py). The agent sees one `query_<thing>` tool that hands off to a sub-agent. Best for one-source agents and when collapsing many tools into one keeps the model focused.
-- **Studio builder** — see [`agents/agent_builder.py`](agents/agent_builder.py). The agent sees StudioTools, a safe `Registry`, Agno docs MCP, and Studio confirmation gates. Best when the user should create or refine components from the AgentOS UI.
+- **Studio builder** — see [`agents/agent_builder.py`](agents/agent_builder.py). The agent sees StudioTools, a safe `Registry`, Agno docs MCP, and delete-only confirmation gates: create/edit/publish execute immediately (every mutation lands in the DB as a versioned component — inspectable and reversible), while deletes pause for human approval. Best when the user should create or refine components from the AgentOS UI, Slack, or an MCP frontend.
 
 ### Database
 
@@ -231,6 +233,17 @@ Good first tools:
 - inspect `git diff`
 - propose a patch or PR, but require human approval before mutation or deploy
 
+## MCP interface
+
+`enable_mcp_server=True` in [`app/main.py`](app/main.py) mounts an MCP server (streamable HTTP) at `/mcp`, on the same port as the REST API. This is the platform's second interface: chat apps (claude.ai and ChatGPT connectors) and coding agents (Claude Code, Cursor) drive the agents, teams, and workflows through it. [`docs/setup-platform.md`](docs/setup-platform.md) is the hand-off prompt that takes a fresh machine from clone to connected.
+
+- **Tools are generic, not per-agent.** `run_agent(agent_id, message, session_id)`, `run_team`, `run_workflow`, and `get_agentos_config` (how clients discover valid ids), plus session and memory CRUD — 19 tools total. The server needs the `fastmcp` package, a direct dependency in `pyproject.toml` (no agno extra ships it).
+- **Auth mirrors the REST API.** Dev (`RUNTIME_ENV=dev`) is open. In prd the same JWT middleware protects `/mcp`; clients send `Authorization: Bearer <token>` with a token minted at os.agno.com. There are no separate service accounts — machine access is a JWT. The verified JWT subject overrides any caller-supplied `user_id`, so identity cannot be spoofed.
+- **HITL pauses are a dead end over MCP.** `run_agent` returns a paused RunOutput immediately, but the MCP server has no continue tool — a paused run resumes only via the REST continue endpoint, the AgentOS UI, or Slack. This is why Agent Builder keeps confirmation on deletes only; anything gated behind confirmation is effectively unusable from chat frontends.
+- **`GET /` serves the MCP mount now.** The home route isn't registered when the MCP server is enabled, so a plain `GET /` returns 404. `/docs`, `/health`, and the rest of the REST API are unaffected.
+
+Local smoke check: `./scripts/mcp_check.sh` — handshake, tool count, and one `run_agent` call through `/mcp`, executed inside the container. To register the endpoint in Claude Code: `claude mcp add --transport http agent-platform http://localhost:8000/mcp`.
+
 ## Slack
 
 Set `SLACK_BOT_TOKEN` and `SLACK_SIGNING_SECRET` and restart. The default wiring in `app/main.py` routes Slack messages to `agent_builder` so users can request new components from chat. Change the `agent=` arg to point at another agent. See the [agno Slack interface docs](https://docs.agno.com/agent-os/interfaces/overview) for the Slack-side app setup.
@@ -256,7 +269,7 @@ The Railway *project* is `agent-platform`; the app *service* is `agent-os`.
 ```bash
 # Add a dependency
 # 1. Edit pyproject.toml
-./scripts/generate_requirements.sh upgrade
+./scripts/generate_requirements.sh   # keeps existing pins; add `upgrade` to refresh every pin
 docker compose up -d --build
 
 # Build a multi-arch image (maintainer-only)

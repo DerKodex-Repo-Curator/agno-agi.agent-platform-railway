@@ -125,8 +125,13 @@ class Case:
     # Reliability (tool-call assertion): set to enable.
     expected_tool_calls: tuple[str, ...] | None = None
     allow_additional_tool_calls: bool = True
+
+    # Snapshot-diff teardown: delete components the case created (even on timeout).
+    cleanup_new_components: bool = False
 ```
 
 The runner calls `agent.arun()` once per case and feeds the response into both checks, so cases that set both fields cost one agent run, not two.
+
+Set `cleanup_new_components=True` on every case whose agent can reach the ungated create/edit/publish Studio tools (all agent-builder cases do this): the runner snapshots Studio component ids before the case and hard-deletes only the new ones after, so eval runs never leave components behind and never touch pre-existing ones.
 
 `evals/cases.py` also conditions one expected tool name on `PARALLEL_API_KEY` (web-search uses Parallel SDK if the key is set, keyless MCP otherwise). If your shell has the var set but `.env` doesn't (or vice versa), the assertion checks the wrong tool — sync them before debugging.
