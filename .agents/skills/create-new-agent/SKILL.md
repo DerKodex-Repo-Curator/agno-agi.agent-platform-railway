@@ -192,7 +192,7 @@ jq -r '.content // .' < /tmp/agent-out.json
 
 Pass = `HTTP 200` and a non-empty `.content` field.
 
-> **Studio-builder-pattern agents:** create/edit/publish StudioTools execute immediately against the DB — only deletes pause for confirmation. Don't smoke-test with a "Build me X" quick prompt; it will create and publish a real component. Probe with a read-only prompt instead (e.g. "What components can you see in the registry?"), or delete anything the smoke test created (the delete pauses for approval in the AgentOS UI).
+> **Studio-builder-pattern agents:** create/edit/publish StudioTools execute immediately against the DB — only deletes pause for confirmation. Don't smoke-test with a "Build me X" quick prompt; it will create and publish a real component. Probe with a read-only prompt instead (e.g. "What components can you see in the registry?"), or delete anything the smoke test created (the delete pauses for approval — grant it in the AgentOS UI, or over MCP with the `continue_run` tool).
 
 Check the container logs to see which tools fired:
 

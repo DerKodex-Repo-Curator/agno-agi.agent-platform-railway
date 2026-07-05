@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 ENV PYTHONPATH=/app
 COPY requirements.txt ./
-RUN uv pip sync requirements.txt --system
+# UV_PRERELEASE=allow is needed while agno is pinned to the 2.7.0a1 alpha (it pulls
+# the agnoctl>=0.1.0a1 prerelease). Drop it when the pin loosens at 2.7 stable.
+RUN UV_PRERELEASE=allow uv pip sync requirements.txt --system
 COPY . .
 
 # ---------------------------------------------------------------------------

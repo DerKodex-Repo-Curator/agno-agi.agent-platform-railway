@@ -128,7 +128,7 @@ Then smoke the MCP interface — the platform's second surface (`enable_mcp_serv
 ./scripts/mcp_check.sh
 ```
 
-Pass = `MCP OK — <n> tools` plus a non-empty agent response. It runs inside the container and calls `platform-manager` (read-only), so it is safe to run repeatedly. (`GET /` returning 404 is expected — the home route is replaced by the MCP mount; `/health` is the liveness probe.)
+Pass = `MCP OK — <n> tools` plus a non-empty agent response. It runs inside the container and calls `platform-manager` (read-only), so it is safe to run repeatedly.
 
 Quality issues (response is plausible but wrong, missing citations, wrong tool fired) are out of scope — note them and recommend [`improve-agent`](../improve-agent/SKILL.md) (autonomous) or [`extend-agent`](../extend-agent/SKILL.md) (user-driven) depending on whether the user has a specific fix in mind.
 

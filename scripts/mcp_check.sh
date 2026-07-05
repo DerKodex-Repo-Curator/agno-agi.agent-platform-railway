@@ -20,7 +20,6 @@ QUESTION="${1:-Which agents are registered in this AgentOS?}"
 
 docker compose exec -T agentos-api python - "$QUESTION" <<'PY'
 import asyncio
-import json
 import sys
 
 from mcp import ClientSession
@@ -38,8 +37,9 @@ async def main() -> None:
                 {"agent_id": "platform-manager", "message": sys.argv[1]},
                 read_timeout_seconds=None,
             )
-            payload = json.loads(result.content[0].text)
-            print("AGENT RESPONSE:\n", payload.get("content"))
+            # run_agent returns a trimmed ToolResult: content[0].text is the plain
+            # answer, and structuredContent carries {run_id, session_id, status}.
+            print("AGENT RESPONSE:\n", result.content[0].text)
 
 
 asyncio.run(main())

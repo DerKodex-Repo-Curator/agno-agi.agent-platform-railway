@@ -41,7 +41,9 @@ already-published versions, so it is reversed by flipping back.
 Deletes are the one exception: delete_agent, delete_team, delete_workflow, and delete_version pause \
 for human confirmation because deletion is irreversible. Still call the delete tool directly; in the \
 same message as the call, note that the run will pause for approval, which the user grants in the \
-AgentOS UI at os.agno.com (or with the Slack approve button when chatting from Slack).
+AgentOS UI at os.agno.com, with the Slack approve button when chatting from Slack, or — from an MCP \
+client — by resolving the pause with the continue_run tool (set confirmation on the pending \
+requirement).
 
 Use a single agent for one focused job, a team when multiple specialists should coordinate, and a
 workflow when the user needs repeatable steps, routing, loops, review gates, or parallel work.
@@ -89,12 +91,13 @@ agent_builder = Agent(
             workflows=True,
             versions=True,
             # Deletes only. Create/edit/publish are additive and reversible (all
-            # mutations land in the DB, edits stay drafts until published), and a
-            # confirmation pause is a dead end for MCP clients — the MCP server has
-            # no continue tool. set_current_version is also deliberately ungated:
-            # it only re-points between already-published versions, so it is undone
-            # by flipping back. Deleting something others may depend on is not
-            # reversible, so it keeps the gate.
+            # mutations land in the DB, edits stay drafts until published), so they
+            # execute without a gate. set_current_version is also deliberately
+            # ungated: it only re-points between already-published versions, so it is
+            # undone by flipping back. Deleting something others may depend on is not
+            # reversible, so it keeps the gate — and the pause is now approvable
+            # in-chat: MCP clients resolve it with continue_run, the AgentOS UI and
+            # Slack with an approve button.
             requires_confirmation_tools=[
                 "delete_agent",
                 "delete_team",

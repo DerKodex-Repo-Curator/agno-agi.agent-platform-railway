@@ -15,6 +15,8 @@ cd agent-platform
 
 **If it fails:** `git` missing → ask the human to install it (macOS: `xcode-select --install`). Directory already exists → `cd agent-platform && git pull` and continue.
 
+> **Aside:** `agno create --template agentos-railway` scaffolds the same template, but it strips the `.git` history — which this repo's git-based coding-agent loops depend on. Clone here so those loops keep working.
+
 ## Step 2 — Configure the API key (human required)
 
 ```sh
@@ -67,29 +69,34 @@ curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/docs
 
 ## Step 5 — Register the platform as an MCP server
 
-The platform exposes an MCP endpoint at `http://localhost:8000/mcp` (no auth needed locally — JWT protects it only in production). Register it in whichever coding agents are on this machine — check for each and register the ones present:
-
-**Claude Code** (`command -v claude`):
+The platform exposes an MCP endpoint at `http://localhost:8000/mcp` (no auth needed locally — the token gate applies only in production). The one-liner registers it in every coding agent on the machine at once:
 
 ```sh
-claude mcp add --transport http agent-platform http://localhost:8000/mcp
+uvx agnoctl connect
 ```
 
-**Verify:** `claude mcp list` shows `agent-platform`.
+It auto-detects Claude Code, Claude Desktop, Codex, and Cursor, points each at `http://localhost:8000/mcp`, and verifies the connection with a real handshake. Against local dev (open mode) it mints an anonymous token; against a deployed OS it mints a service-account PAT.
 
-**Cursor** (`~/.cursor` exists): add to `~/.cursor/mcp.json` (create the file if needed, merge if it exists):
+> **Use user scope, not `--project`.** The default writes the connection to your user config. `agnoctl connect --project` writes it — token included — into a committable `.mcp.json` in the repo; don't, unless you intend to share that token.
 
-```json
-{
-  "mcpServers": {
-    "agent-platform": { "url": "http://localhost:8000/mcp" }
+**Verify:** for Claude Code, `claude mcp list` shows the newly added server — named `agno` by default (override with `--server-name`) — and reports it connected.
+
+**Manual fallback** — if `uvx`/`agnoctl` isn't available, or you want to register a single client by hand:
+
+- **Claude Code** (`command -v claude`): `claude mcp add --transport http agent-platform http://localhost:8000/mcp`
+- **Cursor** (`~/.cursor` exists): add to `~/.cursor/mcp.json` (create the file if needed, merge if it exists):
+
+  ```json
+  {
+    "mcpServers": {
+      "agent-platform": { "url": "http://localhost:8000/mcp" }
+    }
   }
-}
-```
+  ```
 
-**Other MCP-capable tools** (Codex, Windsurf, …): register an HTTP/streamable-HTTP MCP server with URL `http://localhost:8000/mcp`, following that tool's MCP documentation.
+- **Other MCP-capable tools** (Windsurf, …): register an HTTP/streamable-HTTP MCP server with URL `http://localhost:8000/mcp`, following that tool's MCP documentation.
 
-**If none are installed:** skip this step and say so in the final summary — the platform still works from the AgentOS UI and chat connectors.
+**If no coding agents are installed:** skip this step and say so in the final summary — the platform still works from the AgentOS UI and chat connectors.
 
 ## Step 6 — Verify end to end
 
@@ -111,6 +118,6 @@ Summarize, adapted to what actually happened:
 >
 > - **From this coding agent:** the `agent-platform` MCP server is registered — in a new session I can call `run_agent`, `run_team`, and `run_workflow` directly. Try: "ask the web-search agent what happened in AI this week".
 > - **From the AgentOS UI:** connect `http://localhost:8000` at [os.agno.com](https://os.agno.com) to chat with agents and build new ones with Agent Builder.
-> - **From Claude or ChatGPT:** chat apps can't reach localhost. Deploy first (`./scripts/railway/up.sh`, see the README), then add the MCP URL as a connector — in claude.ai: **Settings → Connectors → Add custom connector → `https://<your-railway-domain>/mcp`** (production requires the JWT auth configured during deploy). ChatGPT: **Settings → Connectors** with the same URL.
+> - **From Claude or ChatGPT:** chat apps can't reach localhost. Deploy first (`./scripts/railway/up.sh`, see the README), then add the MCP URL as a connector — in claude.ai: **Settings → Connectors → Add custom connector → `https://<your-railway-domain>/mcp`**. ChatGPT: **Settings → Connectors** with the same URL. Production needs a token: a JWT from os.agno.com, or a service-account PAT (`agno_pat_…`) from `uvx agnoctl connect` or `POST /service-accounts`.
 >
-> Agent Builder creates and edits components immediately and reports what it built; only deletes pause for your approval at os.agno.com.
+> Agent Builder creates and edits components immediately and reports what it built; only deletes pause for your approval — grant it in the AgentOS UI at os.agno.com, or resolve the pause in-chat over MCP with the `continue_run` tool.

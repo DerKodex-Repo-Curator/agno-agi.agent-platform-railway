@@ -52,17 +52,17 @@ Click **Chat** under **Platform Manager** and ask: "How healthy is the platform?
 
 The platform is one backend for every frontend. AgentOS ships an MCP server at `/mcp` (`enable_mcp_server=True` in [`app/main.py`](app/main.py)), so any MCP client can call your agents, teams, and workflows through tools like `run_agent`, `run_team`, and `run_workflow`.
 
-**Coding agents.** Register the endpoint and Claude Code can drive the platform:
+**Coding agents.** One command registers the endpoint in every coding agent on the machine:
 
 ```sh
-claude mcp add --transport http agent-platform http://localhost:8000/mcp
+uvx agnoctl connect
 ```
 
-Any other MCP-capable tool (Cursor, Codex, …) works the same way — point it at `http://localhost:8000/mcp`. Setting up a fresh machine? Hand [`docs/setup-platform.md`](docs/setup-platform.md) to any coding agent: it takes the human from clone to connected, verifying every step.
+It auto-detects Claude Code, Claude Desktop, Codex, and Cursor, registers `http://localhost:8000/mcp`, and verifies the connection with a real handshake. The manual fallback for Claude Code is `claude mcp add --transport http agent-platform http://localhost:8000/mcp`; any other MCP-capable tool points at the same URL. Setting up a fresh machine? Hand [`docs/setup-platform.md`](docs/setup-platform.md) to any coding agent: it takes the human from clone to connected, verifying every step.
 
 **Chat apps.** claude.ai and ChatGPT can't reach localhost — deploy first (see below), then add your platform as a connector. In claude.ai: **Settings → Connectors → Add custom connector** → `https://<your-railway-domain>/mcp`. Same URL in ChatGPT's connector settings.
 
-**Machine access in production.** There are no separate service accounts to manage: `/mcp` sits behind the same Token-Based Authorization as the rest of the API. Mint a token at os.agno.com and send it as `Authorization: Bearer <token>`. Locally (`RUNTIME_ENV=dev`) no token is needed.
+**Machine access in production.** `/mcp` sits behind the same Token-Based Authorization as the rest of the API, and it accepts two kinds of token. For a machine, mint a service-account PAT — `uvx agnoctl connect` does it for you, or `POST /service-accounts` returns an `agno_pat_…` token directly, with default scopes that cover `run_agent`, `run_team`, and `run_workflow`. JWTs minted at os.agno.com work too. Send either as `Authorization: Bearer <token>`. Locally (`RUNTIME_ENV=dev`) no token is needed.
 
 ## Run in production
 
